@@ -1,0 +1,2 @@
+# Obsidian
+Central Obsidian Vault
