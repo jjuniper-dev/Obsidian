@@ -169,18 +169,20 @@ Raw Input → Extraction → Parsing → Normalization → Structured Data
 **Key Innovation:** Dual-agent screening with agreement-driven confidence
 
 **Components:**
-1. **Screening Agent** (GPT-4, T=0.5)
+1. **Screening Agent** (Claude Sonnet, T=0.3)
    - Conservative assessment
-   - Consistent scoring
+   - Consistent, deterministic scoring
+   - Focuses on core quality dimensions
 
-2. **Critical Agent** (GPT-4, T=0.7)
+2. **Critical Agent** (Claude Haiku, T=0.8)
    - Independent assessment
-   - Exploratory thinking
+   - More exploratory thinking
+   - Probes for edge cases and gaps
 
 3. **4-Dimension Scoring:**
    - **Source Credibility** (0-100): Creator trustworthiness
    - **Content Quality** (0-100): Intellectual rigor
-   - **Relevance** (0-100): Alignment with user goals
+   - **Relevance** (0-100): Alignment with user goals (≥60 is hard floor)
    - **Alignment** (0-100): Ethical & methodological alignment
 
 4. **Agreement Gate:**
@@ -188,16 +190,18 @@ Raw Input → Extraction → Parsing → Normalization → Structured Data
    - All 4 dimensions agree = high confidence (95%)
    - Partial disagreement = medium confidence (40-70%)
    - Most disagree = low confidence (20%)
+   - **Per-dimension floor:** If Relevance <60, routes to INBOX regardless of other scores
 
 5. **3-Tier Routing:**
-   - **PROMOTE** (>80): Integrate immediately
-   - **INBOX** (60-80): Manual review required
+   - **PROMOTE** (>80 overall AND all dimensions pass): Integrate immediately
+   - **INBOX** (60-80 OR per-dimension floor triggered): Manual review required
    - **ARCHIVE** (<60): Store but don't prioritize
 
 **Why Not Single Agent + Confidence?**
 - Model confidence is unreliable (overconfident on easy, underconfident on hard)
 - Agent disagreement is interpretable (tells us WHERE confidence is low)
 - Dual agents naturally integrate human review
+- Multi-agent reduces correlated failure modes
 
 **Status:** ✅ Sprint 5 Complete (ready to build in n8n)
 
@@ -295,8 +299,17 @@ routing: PROMOTE
 (VideoCapture {
   id, title, url, source,
   created_at, validated_at,
+  
+  # Agent-specific scores
+  screening_credibility, screening_quality, screening_relevance, screening_alignment,
+  critical_credibility, critical_quality, critical_relevance, critical_alignment,
+  
+  # Composite scores
   credibility_score, quality_score, relevance_score, alignment_score,
-  overall_score, confidence, routing, agents_agree
+  overall_score, confidence, routing, agents_agree,
+  
+  # Metadata
+  obsidian_file
 })
 
 (Concept {
@@ -320,13 +333,14 @@ RELATIONSHIPS:
 
 #### 5c. Vector Database (Chroma)
 - **Format:** Embeddings + metadata
-- **Structure:** Semantic vectors (OpenAI embeddings), similarity indices
+- **Structure:** Semantic vectors (BGE-M3 local embeddings), similarity indices
 - **Use Case:** Semantic search ("find similar ideas"), RAG retrieval
-- **Flow:** Document → OpenAI embedding → Chroma index → Similarity search
+- **Flow:** Document → BGE-M3 embedding (local) → Chroma index → Similarity search
+- **Privacy:** Fully local embedding generation, no external API calls
 
 **Synchronization:**
-- Obsidian ← → Neo4j: Bidirectional sync (Phase 2)
-- Neo4j ← → Chroma: Vector index from Neo4j nodes (Phase 3)
+- Obsidian → Neo4j: One-way canonical source (Phase 2)
+- Neo4j → Chroma: Vector index from Neo4j nodes (Phase 3)
 
 **Status:** ✅ Obsidian vault ready, 🔲 Neo4j schema prepared, 🔲 Chroma integration (Phase 3)
 
@@ -429,9 +443,9 @@ Output: Comprehensive answer with citations
    - Built with React/D3.js
 
 4. **Audio Summaries** (MP3)
-   - Text-to-speech synthesis
+   - Text-to-speech synthesis via Kokoro TTS (local, privacy-first)
    - Podcast-style weekly recaps
-   - Use ElevenLabs or local TTS
+   - Natural voice, low latency
 
 **Status:** 🔲 Phase 3 (planned)
 
@@ -526,9 +540,9 @@ Home PC
    Async: sends webhook to n8n
 
 3. n8n (Validation Layer)
-   Screening Agent scores video (GPT-4)
-   Critical Agent scores video (GPT-4)
-   Compares scores, determines confidence
+   Screening Agent scores video (Claude Sonnet, T=0.3)
+   Critical Agent scores video (Claude Haiku, T=0.8)
+   Compares scores, determines confidence + per-dimension thresholds
    Routes to PROMOTE/INBOX/ARCHIVE
 
 4. n8n (Integration)
@@ -591,12 +605,14 @@ Home PC
 
 | Phase | Sprints | Focus | Status |
 |-------|---------|-------|--------|
-| **1** | 1-4 | Input capture, basic storage | ✅ Sprint 1 Complete |
-| **2** | 5-7 | Validation, dual-agent screening | ✅ Sprint 5 Ready |
-| **3** | 8-9 | Reconciliation, graph evolution | 🔲 Planned |
-| **4** | 10-12 | Reasoning agents, RAG, MCP | 🔲 Planned |
-| **5** | 13-15 | Output generation, dashboards | 🔲 Planned |
-| **6** | 16+ | Governance, optimization, scaling | 🔲 Planned |
+| **1** | 1-5 | Input capture, basic validation | ✅ Sprint 5 Ready |
+| **2** | 6-10 | Cognitive reconciliation, graph comparison | 🔲 Planned |
+| **3** | 11-12 | Hot + Cold architecture, compute efficiency | 🔲 Planned |
+| **4** | 13-15 | Reasoning agents, question engine, RAG | 🔲 Planned |
+| **5** | 16-18 | Intervention & action, task generation | 🔲 Planned |
+| **6** | 19-21 | Outcome measurement framework | 🔲 Planned |
+| **7** | 22+ | Feedback & learning loop (RLHF-Lite) | 🔲 Planned |
+| **8** | Ongoing | Outcome evolution engine, continuous adaptation | 🔲 Planned |
 
 ---
 

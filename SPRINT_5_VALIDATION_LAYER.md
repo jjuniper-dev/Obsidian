@@ -133,11 +133,61 @@ return {
 ```
 
 ### Node 3: Screening Agent Assessment
-**Type:** OpenAI ChatCompletion (GPT-4)
+**Type:** Claude Sonnet (Anthropic API)
+**Temperature:** 0.3 (conservative, deterministic scoring)
+**Purpose:** Consistent baseline assessment across dimensions
 
 **System Prompt:**
 ```
-You are a rigorous content evaluator. You assess content across 4 dimensions:
+You are a rigorous content evaluator using Claude Sonnet. You assess content across 4 dimensions with conservative scoring.
+
+Temperature 0.3 means: Be consistent and principled. Avoid random variation. Score based on clear criteria.
+
+Dimensions:
+1. Source Credibility (0-100): Is the creator trustworthy and authoritative?
+2. Content Quality (0-100): Is it well-researched, clear, substantive?
+3. Relevance to Goals (0-100): Fit with Personal Cognitive Architecture, agentic systems, knowledge management?
+4. Value Alignment (0-100): Empirical rigor, transparency, human agency, ethics?
+
+Respond ONLY with valid JSON, no other text:
+{
+  "credibility_score": <number 0-100>,
+  "quality_score": <number 0-100>,
+  "relevance_score": <number 0-100>,
+  "alignment_score": <number 0-100>,
+  "reasoning": {
+    "credibility": "1-2 sentence explanation",
+    "quality": "1-2 sentence explanation",
+    "relevance": "1-2 sentence explanation",
+    "alignment": "1-2 sentence explanation"
+  }
+}
+```
+
+**User Message:**
+```
+Assess this YouTube video with rigorous, conservative scoring:
+
+**Title:** {{$node["Summarize Video"].json.video_title}}
+
+**Summary:**
+{{$node["Summarize Video"].json.summary}}
+
+Provide your assessment across all 4 dimensions.
+```
+
+### Node 4: Critical Agent Assessment
+**Type:** Claude Haiku (Anthropic API)
+**Temperature:** 0.8 (exploratory, probes for gaps and edge cases)
+**Purpose:** Independent assessment to catch blind spots
+
+**System Prompt:**
+```
+You are a critical content evaluator using Claude Haiku. You assess content across 4 dimensions and look for edge cases, gaps, and potential issues.
+
+Temperature 0.8 means: Be more exploratory. Challenge assumptions. Probe for what might be missing. Still be principled, but consider alternative interpretations.
+
+Same 4 dimensions as the Screening Agent:
 1. Source Credibility (0-100)
 2. Content Quality (0-100)
 3. Relevance to Goals (0-100)
@@ -145,54 +195,38 @@ You are a rigorous content evaluator. You assess content across 4 dimensions:
 
 Respond ONLY with valid JSON, no other text:
 {
-  "credibility_score": number,
-  "quality_score": number,
-  "relevance_score": number,
-  "alignment_score": number,
+  "credibility_score": <number 0-100>,
+  "quality_score": <number 0-100>,
+  "relevance_score": <number 0-100>,
+  "alignment_score": <number 0-100>,
   "reasoning": {
-    "credibility": "brief explanation",
-    "quality": "brief explanation",
-    "relevance": "brief explanation",
-    "alignment": "brief explanation"
+    "credibility": "1-2 sentence explanation",
+    "quality": "1-2 sentence explanation",
+    "relevance": "1-2 sentence explanation",
+    "alignment": "1-2 sentence explanation"
   }
 }
 ```
 
 **User Message:**
 ```
-Video Title: {{$node["Summarize Video"].json.video_title}}
-Creator: Unknown (derive from context if possible)
+Independently assess this content. Look for gaps, blind spots, and edge cases:
 
-Summary:
+**Title:** {{$node["Summarize Video"].json.video_title}}
+
+**Content:**
 {{$node["Summarize Video"].json.summary}}
 
-Assess this content across the 4 dimensions.
-```
-
-### Node 4: Critical Agent Assessment
-**Type:** OpenAI ChatCompletion (GPT-4)
-
-**Same system prompt as Node 3**, different seed/temperature to ensure independent assessment:
-- Temperature: 0.7 (vs 0.5 for Screening Agent) → more variation
-- Different phrasing in user message to avoid anchoring
-
-**User Message:**
-```
-Independently evaluate this content on the 4 dimensions.
-Do not look at previous assessments.
-
-Title: {{$node["Summarize Video"].json.video_title}}
-
-Content Summary:
-{{$node["Summarize Video"].json.summary}}
-
-Provide your independent assessment.
+Provide your critical assessment. This should be independent from any prior scoring.
 ```
 
 ### Node 5: Compare Assessments & Calculate Agreement
 ```javascript
 const screening = $node["Screening Agent Assessment"].json;
 const critical = $node["Critical Agent Assessment"].json;
+
+// PER-DIMENSION THRESHOLDS
+const RELEVANCE_FLOOR = 60; // Hard floor: relevance must be >= 60
 
 // Calculate difference across dimensions
 const credibility_diff = Math.abs(screening.credibility_score - critical.credibility_score);
@@ -215,16 +249,22 @@ const composite_quality = (screening.quality_score + critical.quality_score) / 2
 const composite_relevance = (screening.relevance_score + critical.relevance_score) / 2;
 const composite_alignment = (screening.alignment_score + critical.alignment_score) / 2;
 
+// Per-dimension floor check
+const relevance_passes_floor = composite_relevance >= RELEVANCE_FLOOR;
+const floor_violation = !relevance_passes_floor;
+
 // Overall confidence: based on agreement level
 const agreement_count = [credibility_agree, quality_agree, relevance_agree, alignment_agree].filter(x => x).length;
 const confidence_score = agents_agree ? 95 : (agreement_count === 3 ? 70 : 40);
 
-// Determine routing based on composite score (average of all dimensions)
+// Determine routing based on composite score + per-dimension floors
 const overall_score = (composite_credibility + composite_quality + composite_relevance + composite_alignment) / 4;
 
 let routing;
-if (overall_score > 80) {
+if (overall_score > 80 && relevance_passes_floor) {
   routing = "PROMOTE";
+} else if (floor_violation) {
+  routing = "INBOX"; // Floor violation → manual review regardless of overall score
 } else if (overall_score >= 60) {
   routing = "INBOX";
 } else {
@@ -237,6 +277,7 @@ return {
   confidence_score,
   overall_score,
   routing,
+  floor_violation,
   scores: {
     credibility: {
       screening: screening.credibility_score,
@@ -254,7 +295,9 @@ return {
       screening: screening.relevance_score,
       critical: critical.relevance_score,
       composite: composite_relevance,
-      agree: relevance_agree
+      agree: relevance_agree,
+      floor: RELEVANCE_FLOOR,
+      passes: relevance_passes_floor
     },
     alignment: {
       screening: screening.alignment_score,
@@ -379,10 +422,11 @@ return {
 
 ### Node 8: Update Neo4j with Validation Results
 ```javascript
-// Cypher query to update VideoCapture node with validation scores
+// Cypher query to update VideoCapture node with validation scores (agent-specific + composite)
 const scores = $node["Compare Assessments"].json.scores;
 const routing = $node["Compare Assessments"].json.routing;
 const confidence = $node["Compare Assessments"].json.confidence_score;
+const comparison = $node["Compare Assessments"].json;
 
 return {
   statement: `
@@ -390,6 +434,18 @@ return {
     SET 
       v.validated = true,
       v.validated_at = datetime(),
+      
+      # Agent-specific scores
+      v.screening_credibility = $screening_cred,
+      v.screening_quality = $screening_qual,
+      v.screening_relevance = $screening_rel,
+      v.screening_alignment = $screening_align,
+      v.critical_credibility = $critical_cred,
+      v.critical_quality = $critical_qual,
+      v.critical_relevance = $critical_rel,
+      v.critical_alignment = $critical_align,
+      
+      # Composite scores
       v.credibility_score = $credibility,
       v.quality_score = $quality,
       v.relevance_score = $relevance,
@@ -398,19 +454,29 @@ return {
       v.confidence = $confidence,
       v.routing = $routing,
       v.agents_agree = $agree,
+      v.floor_violation = $floor_violation,
       v.obsidian_file = $obsidian_file
     RETURN v
   `,
   parameters: {
     id: $input.first().json.video_id,
+    screening_cred: scores.credibility.screening,
+    screening_qual: scores.quality.screening,
+    screening_rel: scores.relevance.screening,
+    screening_align: scores.alignment.screening,
+    critical_cred: scores.credibility.critical,
+    critical_qual: scores.quality.critical,
+    critical_rel: scores.relevance.critical,
+    critical_align: scores.alignment.critical,
     credibility: scores.credibility.composite,
     quality: scores.quality.composite,
     relevance: scores.relevance.composite,
     alignment: scores.alignment.composite,
-    overall: $node["Compare Assessments"].json.overall_score,
+    overall: comparison.overall_score,
     confidence,
     routing,
-    agree: $node["Compare Assessments"].json.agents_agree,
+    agree: comparison.agents_agree,
+    floor_violation: comparison.floor_violation,
     obsidian_file: $node["Create Obsidian Note"].json.filepath
   }
 };
@@ -431,6 +497,78 @@ return {
   "manual_review_required": "{{!$node['Compare Assessments'].json.agents_agree}}"
 }
 ```
+
+---
+
+## Deduplication Strategy
+
+**Before agents fire (Insert before Node 3):**
+- Query Neo4j: `MATCH (v:VideoCapture {url: $url}) WHERE v.validated = true RETURN v`
+- If exists: Skip agents, return existing validation result (idempotent)
+- If not exists: Proceed to Node 3 (Screening Agent)
+
+**Rationale:** Prevents duplicate processing of same video. Cost-efficient and idempotent.
+
+---
+
+## INBOX Backlog Policy
+
+**Goal:** Prevent INBOX queue from growing unbounded
+
+**Policy:**
+- **Max Age:** Items in INBOX older than 7 days auto-archive with note: "Auto-archived after 7-day review window"
+- **Max Size:** If INBOX exceeds 50 items, user gets notification: "INBOX threshold exceeded. Review and archive old items."
+- **Daily Summary:** Each morning, generate digest: "5 items in INBOX | 2 require immediate review | 3 are low-priority"
+
+**Implementation:**
+- Node 6 (Obsidian): Tag all INBOX items with `#inbox-submitted-<date>`
+- Daily cron job: Query `#inbox-submitted-<7daysago>` and move to ARCHIVE
+- Weekly report: Count INBOX items and trigger alert if >50
+
+---
+
+## Idempotency Guarantee
+
+**Problem:** Network failures could cause duplicate Neo4j writes
+
+**Solution:** Use `video_id` + `validated_at` as upsert key
+
+**Cypher:**
+```cypher
+MERGE (v:VideoCapture {id: $id})
+  ON CREATE SET v.created_at = datetime()
+  ON MATCH SET v.validated_at = datetime()
+SET 
+  v.validated = true,
+  v.screening_credibility = $screening_cred,
+  ...all other fields...
+RETURN v
+```
+
+This ensures: Same video + same validation window = single node, no duplicates
+
+---
+
+## Cost Analysis (CAD)
+
+### Per-Video Cost
+- **Screening Agent (Claude Sonnet):** ~$0.01-0.015 CAD per video
+- **Critical Agent (Claude Haiku):** ~$0.002-0.003 CAD per video
+- **Total per video:** ~$0.012-0.018 CAD
+
+### Annual Cost Estimates
+- **10 videos/day:** ~$44-66 CAD/year
+- **25 videos/day:** ~$110-165 CAD/year
+- **50 videos/day:** ~$220-330 CAD/year
+- **100 videos/day:** ~$440-660 CAD/year
+
+**For comparison (GPT-4):** Same workload would cost $1,500-2,500 CAD/year
+
+**Breakdown by model:**
+- Sonnet (80% of cost): ~$0.009 CAD per video
+- Haiku (20% of cost): ~$0.003 CAD per video
+
+---
 
 ## Testing & Validation
 
@@ -533,7 +671,17 @@ VideoCapture node now includes:
   source: "youtube",
   created_at: datetime,
   
-  # New validation fields
+  # Agent-specific scores (for Phase 2 learning)
+  screening_credibility: float,
+  screening_quality: float,
+  screening_relevance: float,
+  screening_alignment: float,
+  critical_credibility: float,
+  critical_quality: float,
+  critical_relevance: float,
+  critical_alignment: float,
+  
+  # Composite scores (for routing decisions)
   validated: boolean,
   validated_at: datetime,
   credibility_score: float,
@@ -544,6 +692,7 @@ VideoCapture node now includes:
   confidence: integer,
   routing: enum("PROMOTE", "INBOX", "ARCHIVE"),
   agents_agree: boolean,
+  floor_violation: boolean,
   obsidian_file: string
 }
 ```
