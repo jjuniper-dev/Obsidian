@@ -247,7 +247,8 @@ curl http://localhost:8000/api/healthz
 ### Backend & Processing
 - **FastAPI** (Python) — Webhook receiver & orchestration
 - **n8n** — Workflow automation
-- **OpenAI API** — GPT-4 for agent assessments, Whisper for transcription
+- **Anthropic Claude API** — Claude Sonnet + Haiku for dual-agent assessment
+- **Whisper API** — Audio transcription
 
 ### Knowledge Storage
 - **Obsidian** — Knowledge graph (primary human interface)
