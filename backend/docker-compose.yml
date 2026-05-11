@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  # FastAPI application
+  fastapi:
+    build: .
+    container_name: pca-capture-api
+    ports:
+      - "8000:8000"
+    environment:
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USERNAME=neo4j
+      - NEO4J_PASSWORD=PCAPassword123!
+      - N8N_WEBHOOK_URL=http://host.docker.internal:5678/webhook
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      - neo4j
+    volumes:
+      - ./app:/app/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - pca-network
+
+  # Neo4j Graph Database
+  neo4j:
+    image: neo4j:5.14-community
+    container_name: pca-neo4j
+    ports:
+      - "7474:7474"  # HTTP
+      - "7687:7687"  # Bolt
+    environment:
+      - NEO4J_AUTH=neo4j/PCAPassword123!
+      - NEO4J_PLUGINS=["apoc"]
+    volumes:
+      - neo4j_data:/var/lib/neo4j/data
+    networks:
+      - pca-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7474"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  neo4j_data:
+
+networks:
+  pca-network:
+    driver: bridge
