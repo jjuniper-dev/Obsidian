@@ -1,0 +1,158 @@
+{
+  "name": "YouTube Capture Processor",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "youtube-capture",
+        "responseMode": "onReceived",
+        "responseData": "successResponse"
+      },
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract and validate payload\nconst payload = $input.first().json;\n\n// Extract video ID from YouTube URL\nconst videoIdMatch = payload.url.match(/(?:youtube\\.com\\/watch\\?v=|youtu\\.be\\/)([^&\\n?#]+)/);\nconst videoId = videoIdMatch ? videoIdMatch[1] : null;\n\nif (!videoId) {\n  throw new Error('Invalid YouTube URL');\n}\n\nreturn {\n  videoId,\n  url: payload.url,\n  title: payload.title,\n  transcript: payload.transcript || null,\n  id: payload.id,\n  captureDate: new Date().toISOString()\n};"
+      },
+      "name": "Extract Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 100]
+    },
+    {
+      "parameters": {
+        "url": "=https://www.youtube.com/oembed?url={{$node[\"Extract Payload\"].json.url}}&format=json",
+        "method": "GET",
+        "options": {}
+      },
+      "name": "Fetch YouTube Metadata",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [650, 100],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$node[\"Extract Payload\"].json.transcript}}",
+              "operation": "isEmpty"
+            }
+          ]
+        }
+      },
+      "name": "Check Transcript Exists",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [850, 100]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "model": "gpt-4",
+        "messages": {
+          "messageValues": [
+            {
+              "content": "=Summarize this YouTube video transcript in 2-3 sentences.\n\nTitle: {{$node[\"Extract Payload\"].json.title}}\n\nTranscript:\n{{$node[\"Extract Payload\"].json.transcript}}",
+              "role": "user"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.5
+        }
+      },
+      "name": "Summarize with GPT",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [1050, 100]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "model": "gpt-4",
+        "messages": {
+          "messageValues": [
+            {
+              "content": "=Extract 3-5 key action items or tasks from this content. Format as bullet points. Return only the bullet points, no additional text.\n\nTitle: {{$node[\"Extract Payload\"].json.title}}\n\nSummary: {{$node[\"Summarize with GPT\"].json.choices[0].message.content}}",
+              "role": "user"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "name": "Extract Tasks",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [1250, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Create Obsidian markdown note\nconst payload = $node[\"Extract Payload\"].json;\nconst metadata = $node[\"Fetch YouTube Metadata\"].json;\nconst summary = $node[\"Summarize with GPT\"].json.choices[0].message.content;\nconst tasks = $node[\"Extract Tasks\"].json.choices[0].message.content;\n\nconst date = new Date();\nconst dateStr = date.toISOString().split('T')[0];\nconst filename = `${dateStr}-${payload.videoId}.md`;\n\nconst markdownContent = `# ${payload.title}\n\n**Source:** [${payload.url}](${payload.url})\n**Author:** ${metadata.author_name || 'Unknown'}\n**Date:** ${payload.captureDate}\n\n## Thumbnail\n![thumbnail](${metadata.thumbnail_url})\n\n## Summary\n${summary}\n\n## Transcript\n${payload.transcript || '(No transcript available)'}\n\n## Action Items\n${tasks}\n\n## Metadata\n- Video ID: ${payload.videoId}\n- Duration: ${metadata.width || 'Unknown'} seconds\n- Processed at: ${new Date().toISOString()}\n- Tags: #youtube #video #captured\n`;\n\nreturn {\n  filename,\n  content: markdownContent,\n  videoId: payload.videoId,\n  title: payload.title,\n  url: payload.url,\n  summary,\n  tasks,\n  id: payload.id,\n  captureDate: payload.captureDate\n};"
+      },
+      "name": "Prepare Obsidian Note",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1450, 100]
+    },
+    {
+      "parameters": {
+        "url": "=neo4j://bolt://{{env[\"NEO4J_URI\"]}}/",
+        "authentication": "basicAuth",
+        "basicAuth": {
+          "user": "={{env[\"NEO4J_USERNAME\"]}}",
+          "password": "={{env[\"NEO4J_PASSWORD\"]}}"
+        },
+        "body": "={\n  \"statements\": [\n    {\n      \"statement\": \"MATCH (v:VideoCapture {id: $id}) SET v.summary = $summary, v.transcript = $transcript, v.tasks = $tasks, v.processed = true, v.obsidian_file = $obsidian_file, v.processed_at = datetime() RETURN v\",\n      \"parameters\": {\n        \"id\": \"{{$node[\\\"Prepare Obsidian Note\\\"].json.id}}\",\n        \"summary\": \"{{$node[\\\"Prepare Obsidian Note\\\"].json.summary}}\",\n        \"transcript\": \"{{$node[\\\"Extract Payload\\\"].json.transcript}}\",\n        \"tasks\": \"{{$node[\\\"Prepare Obsidian Note\\\"].json.tasks}}\",\n        \"obsidian_file\": \"Captures/YouTube/{{$node[\\\"Prepare Obsidian Note\\\"].json.filename}}\"\n      }\n    }\n  ]\n}"
+      },
+      "name": "Update Neo4j",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1650, 100]
+    },
+    {
+      "parameters": {
+        "responseCode": 200,
+        "responseData": "={\"status\": \"success\", \"message\": \"YouTube video processed\", \"obsidian_file\": \"{{$node[\\\"Prepare Obsidian Note\\\"].json.filename}}\", \"processed_at\": \"{{$node[\\\"Prepare Obsidian Note\\\"].json.captureDate}}\"}"
+      },
+      "name": "Response Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1850, 100]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [[{"node": "Extract Payload", "branch": 0}]]
+    },
+    "Extract Payload": {
+      "main": [[{"node": "Fetch YouTube Metadata", "branch": 0}]]
+    },
+    "Fetch YouTube Metadata": {
+      "main": [[{"node": "Check Transcript Exists", "branch": 0}]]
+    },
+    "Check Transcript Exists": {
+      "main": [
+        [{"node": "Summarize with GPT", "branch": 0}],
+        [{"node": "Summarize with GPT", "branch": 0}]
+      ]
+    },
+    "Summarize with GPT": {
+      "main": [[{"node": "Extract Tasks", "branch": 0}]]
+    },
+    "Extract Tasks": {
+      "main": [[{"node": "Prepare Obsidian Note", "branch": 0}]]
+    },
+    "Prepare Obsidian Note": {
+      "main": [[{"node": "Update Neo4j", "branch": 0}]]
+    },
+    "Update Neo4j": {
+      "main": [[{"node": "Response Success", "branch": 0}]]
+    }
+  }
+}
