@@ -1,0 +1,556 @@
+# Sprint 5: Validation Layer — Dual-Agent Screening & Scoring
+
+**Objective:** Implement the Validation Layer that assesses captured content across 4 dimensions (credibility, quality, relevance, alignment) using dual-agent agreement-driven confidence scoring.
+
+## Architecture Overview
+
+```
+INPUT (YouTube Video)
+    ↓
+CAPTURE LAYER (FastAPI)
+    • Create VideoCapture node in Neo4j
+    • Summarize content
+    ↓
+VALIDATION LAYER (n8n) ← SPRINT 5
+    • Screening Agent Assessment
+      - Source Credibility (0-100)
+      - Content Quality (0-100)
+      - Relevance to Goals (0-100)
+      - Value Alignment (0-100)
+    • Critical Agent Assessment (independent)
+      - Same 4 dimensions
+    • Agreement/Disagreement Gate
+      - If agents agree → High confidence → Route
+      - If agents disagree → Flag for human review
+    ↓
+ROUTING DECISION
+    • Score >80 → PROMOTE (integrate into knowledge system)
+    • Score 60-80 → INBOX (manual review required)
+    • Score <60 → ARCHIVE (low relevance, store for later)
+    ↓
+OUTPUT
+    • Obsidian note with validation report
+    • Neo4j updated with scores + routing decision
+    • Confidence signal for reconciliation engine
+```
+
+## Validation Dimensions
+
+### 1. Source Credibility (0-100)
+Assessment of creator/source trustworthiness:
+- **90-100:** Industry expert, peer-reviewed, established authority
+- **70-89:** Credible creator with track record, multiple sources confirm
+- **50-69:** Generally trustworthy but limited verification
+- **30-49:** Mixed reputation, some unreliable claims detected
+- **0-29:** Unreliable, misinformation, low credibility
+
+**Screening Agent Prompt:**
+```
+Assess source credibility for this YouTube creator.
+Consider: expertise, track record, citations, peer recognition, past accuracy.
+Rate 0-100 where 100 = world-leading authority in their domain.
+```
+
+### 2. Content Quality (0-100)
+Assessment of intellectual rigor and presentation:
+- **90-100:** Deeply researched, novel insights, excellent presentation
+- **70-89:** Well-structured, accurate, clear presentation, good depth
+- **50-69:** Adequate content, some gaps, decent organization
+- **30-49:** Superficial treatment, some errors, unclear sections
+- **0-29:** Poor quality, significant errors, incoherent presentation
+
+**Screening Agent Prompt:**
+```
+Assess the intellectual quality of this content.
+Consider: research depth, novelty, accuracy, logical flow, presentation clarity.
+Rate 0-100 where 100 = publishable academic/industry standard.
+```
+
+### 3. Relevance to Your Goals (0-100)
+Assessment of fit with your learning/knowledge objectives:
+- **90-100:** Directly addresses core goals, immediately applicable
+- **70-89:** Relevant to goals, useful but not critical
+- **50-69:** Tangentially related, some useful context
+- **30-49:** Loosely related, minimal relevance
+- **0-29:** Off-topic, not relevant to stated goals
+
+**Screening Agent Prompt:**
+```
+You are evaluating content fit for someone building:
+- A Personal Cognitive Architecture
+- A knowledge evolution system
+- Real-time decision assurance systems
+- Agentic systems with human oversight
+
+Assess how relevant this video is to these goals.
+Rate 0-100 where 100 = directly addresses core architectural needs.
+```
+
+### 4. Value Alignment (0-100)
+Assessment of ethical/methodological alignment:
+- **90-100:** Aligned with empirical rigor, ethics, transparency, human agency
+- **70-89:** Generally aligned, minor concerns
+- **50-69:** Mixed signals, some misalignment
+- **30-49:** Notable misalignment on key values
+- **0-29:** Fundamentally misaligned, contradicts core values
+
+**Screening Agent Prompt:**
+```
+Assess alignment with these values:
+- Empirical rigor and evidence-based reasoning
+- Transparency and explainability
+- Human agency and control (agents augment, not replace)
+- Privacy and data ethics
+- Bias awareness and mitigation
+
+Rate 0-100 where 100 = exemplary alignment.
+```
+
+## n8n Workflow Structure
+
+### Node 1: Webhook Trigger
+- Listen on `/webhook/youtube-capture`
+- Receive: `{url, title, transcript, id}`
+
+### Node 2: Summarize Video
+```javascript
+// Prepare summary for agent assessment
+const transcript = $input.first().json.transcript;
+
+// If transcript is short, use as summary
+// If long, use first 2000 chars + "..." for assessment
+const summary = transcript.length > 2000 
+  ? transcript.substring(0, 2000) + "...[truncated]"
+  : transcript;
+
+return {
+  video_title: $input.first().json.title,
+  video_url: $input.first().json.url,
+  summary,
+  full_transcript: transcript,
+  video_id: $input.first().json.id
+};
+```
+
+### Node 3: Screening Agent Assessment
+**Type:** OpenAI ChatCompletion (GPT-4)
+
+**System Prompt:**
+```
+You are a rigorous content evaluator. You assess content across 4 dimensions:
+1. Source Credibility (0-100)
+2. Content Quality (0-100)
+3. Relevance to Goals (0-100)
+4. Value Alignment (0-100)
+
+Respond ONLY with valid JSON, no other text:
+{
+  "credibility_score": number,
+  "quality_score": number,
+  "relevance_score": number,
+  "alignment_score": number,
+  "reasoning": {
+    "credibility": "brief explanation",
+    "quality": "brief explanation",
+    "relevance": "brief explanation",
+    "alignment": "brief explanation"
+  }
+}
+```
+
+**User Message:**
+```
+Video Title: {{$node["Summarize Video"].json.video_title}}
+Creator: Unknown (derive from context if possible)
+
+Summary:
+{{$node["Summarize Video"].json.summary}}
+
+Assess this content across the 4 dimensions.
+```
+
+### Node 4: Critical Agent Assessment
+**Type:** OpenAI ChatCompletion (GPT-4)
+
+**Same system prompt as Node 3**, different seed/temperature to ensure independent assessment:
+- Temperature: 0.7 (vs 0.5 for Screening Agent) → more variation
+- Different phrasing in user message to avoid anchoring
+
+**User Message:**
+```
+Independently evaluate this content on the 4 dimensions.
+Do not look at previous assessments.
+
+Title: {{$node["Summarize Video"].json.video_title}}
+
+Content Summary:
+{{$node["Summarize Video"].json.summary}}
+
+Provide your independent assessment.
+```
+
+### Node 5: Compare Assessments & Calculate Agreement
+```javascript
+const screening = $node["Screening Agent Assessment"].json;
+const critical = $node["Critical Agent Assessment"].json;
+
+// Calculate difference across dimensions
+const credibility_diff = Math.abs(screening.credibility_score - critical.credibility_score);
+const quality_diff = Math.abs(screening.quality_score - critical.quality_score);
+const relevance_diff = Math.abs(screening.relevance_score - critical.relevance_score);
+const alignment_diff = Math.abs(screening.alignment_score - critical.alignment_score);
+
+// Agreement threshold: difference < 15 points = agreement
+const credibility_agree = credibility_diff < 15;
+const quality_agree = quality_diff < 15;
+const relevance_agree = relevance_diff < 15;
+const alignment_agree = alignment_diff < 15;
+
+// Overall agreement: all dimensions must agree
+const agents_agree = credibility_agree && quality_agree && relevance_agree && alignment_agree;
+
+// Calculate composite scores (average of both agents)
+const composite_credibility = (screening.credibility_score + critical.credibility_score) / 2;
+const composite_quality = (screening.quality_score + critical.quality_score) / 2;
+const composite_relevance = (screening.relevance_score + critical.relevance_score) / 2;
+const composite_alignment = (screening.alignment_score + critical.alignment_score) / 2;
+
+// Overall confidence: based on agreement level
+const agreement_count = [credibility_agree, quality_agree, relevance_agree, alignment_agree].filter(x => x).length;
+const confidence_score = agents_agree ? 95 : (agreement_count === 3 ? 70 : 40);
+
+// Determine routing based on composite score (average of all dimensions)
+const overall_score = (composite_credibility + composite_quality + composite_relevance + composite_alignment) / 4;
+
+let routing;
+if (overall_score > 80) {
+  routing = "PROMOTE";
+} else if (overall_score >= 60) {
+  routing = "INBOX";
+} else {
+  routing = "ARCHIVE";
+}
+
+return {
+  agents_agree,
+  agreement_count,
+  confidence_score,
+  overall_score,
+  routing,
+  scores: {
+    credibility: {
+      screening: screening.credibility_score,
+      critical: critical.credibility_score,
+      composite: composite_credibility,
+      agree: credibility_agree
+    },
+    quality: {
+      screening: screening.quality_score,
+      critical: critical.quality_score,
+      composite: composite_quality,
+      agree: quality_agree
+    },
+    relevance: {
+      screening: screening.relevance_score,
+      critical: critical.relevance_score,
+      composite: composite_relevance,
+      agree: relevance_agree
+    },
+    alignment: {
+      screening: screening.alignment_score,
+      critical: critical.alignment_score,
+      composite: composite_alignment,
+      agree: alignment_agree
+    }
+  },
+  reasoning: {
+    screening: screening.reasoning,
+    critical: critical.reasoning
+  }
+};
+```
+
+### Node 6: Create Obsidian Validation Note
+```javascript
+const comparison = $node["Compare Assessments"].json;
+const video = $node["Summarize Video"].json;
+const now = new Date();
+const dateStr = now.toISOString().split('T')[0];
+
+const validationReport = `# ${video.video_title}
+
+**URL:** [Watch](${video.video_url})
+**Assessment Date:** ${now.toISOString()}
+**Status:** ${comparison.routing}
+
+## Validation Results
+
+### Overall Score: ${comparison.overall_score.toFixed(1)}/100
+**Routing:** ${comparison.routing}
+**Confidence:** ${comparison.confidence_score}%
+**Agent Agreement:** ${comparison.agents_agree ? '✓ YES' : '⚠️ DISAGREEMENT'}
+
+---
+
+## Dimension Scores
+
+### 1. Source Credibility: ${comparison.scores.credibility.composite.toFixed(0)}/100
+- Screening Agent: ${comparison.scores.credibility.screening}/100
+- Critical Agent: ${comparison.scores.credibility.critical}/100
+- Agreement: ${comparison.scores.credibility.agree ? '✓' : '✗'}
+
+**Reasoning:**
+- Screening: ${comparison.reasoning.screening.credibility}
+- Critical: ${comparison.reasoning.critical.credibility}
+
+### 2. Content Quality: ${comparison.scores.quality.composite.toFixed(0)}/100
+- Screening Agent: ${comparison.scores.quality.screening}/100
+- Critical Agent: ${comparison.scores.quality.critical}/100
+- Agreement: ${comparison.scores.quality.agree ? '✓' : '✗'}
+
+**Reasoning:**
+- Screening: ${comparison.reasoning.screening.quality}
+- Critical: ${comparison.reasoning.critical.quality}
+
+### 3. Relevance to Goals: ${comparison.scores.relevance.composite.toFixed(0)}/100
+- Screening Agent: ${comparison.scores.relevance.screening}/100
+- Critical Agent: ${comparison.scores.relevance.critical}/100
+- Agreement: ${comparison.scores.relevance.agree ? '✓' : '✗'}
+
+**Reasoning:**
+- Screening: ${comparison.reasoning.screening.relevance}
+- Critical: ${comparison.reasoning.critical.relevance}
+
+### 4. Value Alignment: ${comparison.scores.alignment.composite.toFixed(0)}/100
+- Screening Agent: ${comparison.scores.alignment.screening}/100
+- Critical Agent: ${comparison.scores.alignment.critical}/100
+- Agreement: ${comparison.scores.alignment.agree ? '✓' : '✗'}
+
+**Reasoning:**
+- Screening: ${comparison.reasoning.screening.alignment}
+- Critical: ${comparison.reasoning.critical.alignment}
+
+---
+
+## Summary
+
+${comparison.agents_agree 
+  ? `✓ **Agents Agree** — High confidence in assessment (${comparison.confidence_score}%)`
+  : `⚠️ **Agents Disagree** on ${4 - comparison.agreement_count} dimension(s) — Flagged for manual review`
+}
+
+**Recommendation:** ${comparison.routing === 'PROMOTE' ? 'Integrate into knowledge system' : comparison.routing === 'INBOX' ? 'Requires manual review before integration' : 'Archive for later reference'}
+
+---
+
+## Routing Decision
+
+\`\`\`
+${comparison.routing}
+${comparison.routing === 'PROMOTE' ? '→ Integrate into knowledge graph and semantic index' : ''}
+${comparison.routing === 'INBOX' ? '→ Review manually to validate agent assessment' : ''}
+${comparison.routing === 'ARCHIVE' ? '→ Store but do not prioritize in knowledge synthesis' : ''}
+\`\`\`
+
+---
+
+**Assessment ID:** ${video.video_id}
+**Video ID:** ${video.video_id}
+**Tags:** #validation #assessment #screeningresult`;
+
+const filename = `${dateStr}-${video.video_id}-validation.md`;
+
+return {
+  filename,
+  filepath: `Captures/YouTube/${filename}`,
+  content: validationReport,
+  video_id: video.video_id,
+  routing: comparison.routing,
+  scores: comparison.scores,
+  confidence: comparison.confidence_score,
+  agents_agree: comparison.agents_agree
+};
+```
+
+### Node 7: Write Validation Note to Obsidian
+**Type:** Write Binary File
+- **Path:** `/path/to/vault/{{$node["Create Obsidian Note"].json.filepath}}`
+- **Content:** `{{$node["Create Obsidian Note"].json.content}}`
+
+### Node 8: Update Neo4j with Validation Results
+```javascript
+// Cypher query to update VideoCapture node with validation scores
+const scores = $node["Compare Assessments"].json.scores;
+const routing = $node["Compare Assessments"].json.routing;
+const confidence = $node["Compare Assessments"].json.confidence_score;
+
+return {
+  statement: `
+    MATCH (v:VideoCapture {id: $id})
+    SET 
+      v.validated = true,
+      v.validated_at = datetime(),
+      v.credibility_score = $credibility,
+      v.quality_score = $quality,
+      v.relevance_score = $relevance,
+      v.alignment_score = $alignment,
+      v.overall_score = $overall,
+      v.confidence = $confidence,
+      v.routing = $routing,
+      v.agents_agree = $agree,
+      v.obsidian_file = $obsidian_file
+    RETURN v
+  `,
+  parameters: {
+    id: $input.first().json.video_id,
+    credibility: scores.credibility.composite,
+    quality: scores.quality.composite,
+    relevance: scores.relevance.composite,
+    alignment: scores.alignment.composite,
+    overall: $node["Compare Assessments"].json.overall_score,
+    confidence,
+    routing,
+    agree: $node["Compare Assessments"].json.agents_agree,
+    obsidian_file: $node["Create Obsidian Note"].json.filepath
+  }
+};
+```
+
+### Node 9: Response
+**Type:** Respond to Webhook
+```json
+{
+  "status": "success",
+  "validation": {
+    "overall_score": "{{$node['Compare Assessments'].json.overall_score}}",
+    "routing": "{{$node['Compare Assessments'].json.routing}}",
+    "confidence": "{{$node['Compare Assessments'].json.confidence_score}}%",
+    "agents_agree": "{{$node['Compare Assessments'].json.agents_agree}}"
+  },
+  "obsidian_file": "{{$node['Create Obsidian Note'].json.filename}}",
+  "manual_review_required": "{{!$node['Compare Assessments'].json.agents_agree}}"
+}
+```
+
+## Testing & Validation
+
+### Test Case 1: High-Quality, Credible Content (Should PROMOTE)
+```bash
+curl -X POST http://localhost:8000/api/capture/youtube \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://www.youtube.com/watch?v=example1",
+    "title": "Building Agentic Systems with Neo4j GraphRAG",
+    "transcript": "In this presentation, Neo4j Chief Technologist Michael Hunger walks through how to build agentic systems using graph intelligence...",
+    "id": "test-promote-001"
+  }'
+```
+Expected: Overall score >80, agents agree, routing=PROMOTE
+
+### Test Case 2: Mediocre Content (Should INBOX)
+```bash
+curl -X POST http://localhost:8000/api/capture/youtube \
+  -d '{
+    "url": "https://www.youtube.com/watch?v=example2",
+    "title": "AI Tips and Tricks",
+    "transcript": "Here are some random tips about AI that might be useful. Everyone uses AI differently so this might or might not help you...",
+    "id": "test-inbox-001"
+  }'
+```
+Expected: Overall score 60-80, possible disagreement, routing=INBOX
+
+### Test Case 3: Low-Quality Content (Should ARCHIVE)
+```bash
+curl -X POST http://localhost:8000/api/capture/youtube \
+  -d '{
+    "url": "https://www.youtube.com/watch?v=example3",
+    "title": "Make Money Fast with AI",
+    "transcript": "Buy my course on AI. It will make you rich. AI is magic. No technical details provided...",
+    "id": "test-archive-001"
+  }'
+```
+Expected: Overall score <60, agents agree, routing=ARCHIVE
+
+## Obsidian Output Example
+
+The validation note will look like:
+
+```markdown
+# Building Agentic Systems with Neo4j GraphRAG
+
+**URL:** [Watch](https://youtube.com/...)
+**Assessment Date:** 2026-05-11T14:30:00Z
+**Status:** PROMOTE
+
+## Validation Results
+
+### Overall Score: 87.5/100
+**Routing:** PROMOTE
+**Confidence:** 95%
+**Agent Agreement:** ✓ YES
+
+---
+
+## Dimension Scores
+
+### 1. Source Credibility: 92/100
+- Screening Agent: 90/100
+- Critical Agent: 94/100
+- Agreement: ✓
+
+### 2. Content Quality: 89/100
+- Screening Agent: 88/100
+- Critical Agent: 90/100
+- Agreement: ✓
+
+### 3. Relevance to Goals: 85/100
+- Screening Agent: 83/100
+- Critical Agent: 87/100
+- Agreement: ✓
+
+### 4. Value Alignment: 84/100
+- Screening Agent: 84/100
+- Critical Agent: 84/100
+- Agreement: ✓
+
+---
+
+## Summary
+
+✓ **Agents Agree** — High confidence in assessment (95%)
+
+**Recommendation:** Integrate into knowledge system
+```
+
+## Neo4j Schema Update
+
+VideoCapture node now includes:
+```cypher
+{
+  id: string,
+  url: string,
+  title: string,
+  source: "youtube",
+  created_at: datetime,
+  
+  # New validation fields
+  validated: boolean,
+  validated_at: datetime,
+  credibility_score: float,
+  quality_score: float,
+  relevance_score: float,
+  alignment_score: float,
+  overall_score: float,
+  confidence: integer,
+  routing: enum("PROMOTE", "INBOX", "ARCHIVE"),
+  agents_agree: boolean,
+  obsidian_file: string
+}
+```
+
+## Next Steps
+
+Once Sprint 5 is working:
+- **Sprint 6:** Voice Memo Processor with same validation layer
+- **Sprint 7:** Chat/Social Processor with same validation layer
+- **Sprint 8:** Cognitive Reconciliation Engine (Phase 2) - graph comparison and relationship detection
