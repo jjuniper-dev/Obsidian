@@ -2,21 +2,22 @@
 source_of_truth: true
 canonical_layer: obsidian
 semantic_status: canonical
-note_type: concept
+note_type: decision
 review_status: reviewed
 created:
 updated:
 aliases: []
 tags: []
-entity_id:
+decision_id:
+status: proposed
 agent_provenance:
 confidence:
 ---
 
-# Concept
+# Decision
 
-## Definition
+## Context
 
-## Why it matters
+## Decision
 
-## Links
+## Consequences
