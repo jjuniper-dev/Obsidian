@@ -13,7 +13,20 @@ TAXONOMY = {
     "05_Themes": {"theme", "concept"},
     "06_People": {"person"},
     "07_Outputs": {"output", "decision"},
+    "08_Media": {"media", "asset", "source", "reference"},
+    "20_MOCs": {"moc"},
+    "30_Templates": {
+        "template",
+        "capture",
+        "concept",
+        "daily",
+        "decision",
+        "reference",
+        "research",
+    },
     "40_Reference": {"reference", "source", "clipping"},
+    "_System": {"system"},
+    "90_Archive": {"archived", "archive", "capture", "concept", "daily", "decision", "note", "project", "reference", "research"},
     # Transitional capture taxonomy from OneDrive Remotely Save
     "10_Reflections": {"reflection", "concept", "note"},
     "20_Notes": {"note", "capture", "research"},
@@ -24,50 +37,89 @@ TAXONOMY = {
     "70_Processed": {"output", "archived", "decision"},
 }
 
+REQUIRED_CANONICAL_SOURCE_FIELDS = ("repo", "path", "branch")
+
 
 def parse_frontmatter(text: str):
-    if not text.startswith('---\n'):
+    if not text.startswith("---\n"):
         return {}
-    end = text.find('\n---\n', 4)
+    end = text.find("\n---\n", 4)
     if end == -1:
         return {}
+
     block = text[4:end]
     data = {}
+    current_key = None
     for line in block.splitlines():
-        if ':' in line and not line.startswith('  '):
-            k, v = line.split(':', 1)
-            data[k.strip()] = v.strip()
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if line.startswith("  ") and current_key:
+            nested_line = line.strip()
+            if ":" in nested_line:
+                nested_key, nested_value = nested_line.split(":", 1)
+                nested = data.get(current_key)
+                if not isinstance(nested, dict):
+                    nested = {}
+                    data[current_key] = nested
+                nested[nested_key.strip()] = nested_value.strip()
+            continue
+        if ":" in line:
+            key, value = line.split(":", 1)
+            current_key = key.strip()
+            data[current_key] = value.strip()
     return data
 
 
+def is_template(rel: Path):
+    return rel.parts and rel.parts[0] == "30_Templates"
+
+
+def validate_canonical_source(rel: Path, fm: dict):
+    canonical_source = fm.get("canonical_source")
+    if not isinstance(canonical_source, dict):
+        return [f"{rel}: mirror note missing canonical_source object"]
+
+    missing = [
+        field
+        for field in REQUIRED_CANONICAL_SOURCE_FIELDS
+        if not canonical_source.get(field)
+    ]
+    if missing:
+        return [f"{rel}: mirror note canonical_source missing populated field(s): {', '.join(missing)}"]
+    return []
+
+
 errors = []
-for p in ROOT.rglob('*.md'):
+for p in ROOT.rglob("*.md"):
     rel = p.relative_to(ROOT)
-    if str(rel).startswith('.git') or str(rel).startswith('_System/scripts'):
+    rel_text = str(rel)
+    if rel_text.startswith(".git") or rel_text.startswith("_System/scripts"):
         continue
 
-    text = p.read_text(encoding='utf-8', errors='ignore')
+    text = p.read_text(encoding="utf-8", errors="ignore")
     fm = parse_frontmatter(text)
     if not fm:
         continue
 
-    sot = fm.get('source_of_truth', '')
-    if sot not in {'true', 'false'}:
-        errors.append(f"{rel}: missing/invalid source_of_truth")
-
-    if sot == 'false' and 'canonical_source' not in text:
-        errors.append(f"{rel}: mirror note missing canonical_source")
-
-    parent = rel.parts[0] if rel.parts else ''
-    note_type = fm.get('note_type', '')
+    parent = rel.parts[0] if rel.parts else ""
+    note_type = fm.get("note_type", "")
     if parent in TAXONOMY and note_type and note_type not in TAXONOMY[parent]:
-        allowed = ','.join(sorted(TAXONOMY[parent]))
+        allowed = ",".join(sorted(TAXONOMY[parent]))
         errors.append(f"{rel}: folder/type mismatch ({parent} vs note_type={note_type}; allowed={allowed})")
 
+    if is_template(rel):
+        continue
+
+    sot = fm.get("source_of_truth", "")
+    if sot not in {"true", "false"}:
+        errors.append(f"{rel}: missing/invalid source_of_truth")
+    elif sot == "false":
+        errors.extend(validate_canonical_source(rel, fm))
+
 if errors:
-    print('Vault validation failed:')
+    print("Vault validation failed:")
     for e in errors:
-        print('-', e)
+        print("-", e)
     raise SystemExit(1)
 
-print('Vault validation passed')
+print("Vault validation passed")
