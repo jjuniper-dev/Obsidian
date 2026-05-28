@@ -125,23 +125,23 @@ Folders are prefixed with numbers for ordering and function clarity. This is the
   - `Review Workflow.md` — promotion and review process
   - Subfolders: `workflows/`, `schemas/`, `agent-definitions/`
 
-- **`agents`** — agent definitions and configurations
+- **`agents/`** — agent definitions and configurations
   - One file per agent role: `Capture Agent.md`, `Researcher.md`, `Analyst.md`
   - Agents' allowed write zones, templates, validation rules
   - Integration with PCA repo agent definitions
 
-- **`logs`** — operation and integration logs
+- **`logs/`** — operation and integration logs
   - Agent operation logs (writes, errors, validations)
   - Sync logs (vault ↔ PCA, vault ↔ n8n)
   - Audit trail for sensitive note modifications
   - Retention: keep 90 days; archive older logs to `90_Archive/logs/YYYY-MM/`
 
-- **`routing`** — intent routing and dispatch definitions
+- **`routing/`** — intent routing and dispatch definitions
   - Capture routing rules (inbox → target folder logic)
   - Integration routing (n8n → vault write targets)
   - Topic routing (concept → related folders)
 
-- **`memory`** — semantic memory structures
+- **`memory/`** — semantic memory structures
   - Entity registry (`Entities.md`) — canonical list of people, projects, concepts
   - Alias registry (`Aliases.md`) — canonical aliases and wikilink mappings
   - Relationship graph snapshots
@@ -296,15 +296,22 @@ Before any agent write:
 
 | Current Path | Target Path | Action |
 |---|---|---|
-| `Work/` | `02_Projects/` | Migrate content; delete old folder |
-| `Personal/` | `01_Daily/` + `06_People/` | Move dated files to daily; person notes to people folder |
-| `Templates/` | `30_Templates/` | Merge; standardize; delete `Templates/` |
-| `20_MOCs/` | `20_MOCs/` | Keep; populate with indices |
-| `30_Templates/` | `30_Templates/` | Keep; standardize templates |
-| `03_Research/`, `04_Concepts/`, `07_Outputs/`, `40_Reference/` | Keep as-is | Already canonical; ensure populated |
-| `Shared-Knowledge/` | Archive to `90_Archive/deprecated/` | Consolidate or delete per content |
-| Root `.md` files (day notes) | `01_Daily/` | Move date-stamped files to daily |
-| `_System/` | `_System/` + `agents/`, `logs/`, `routing/`, `memory/` | Keep + expand subdirectories |
+| Root `.md` files (day notes) | `01_Daily/YYYY/MM/` | Migrate date-stamped files ✅ (in progress) |
+| `_System/` | Keep + expand subdirectories | Already canonical |
+| `20_MOCs/`, `30_Templates/`, `40_Reference/`, etc. | Keep as-is | Already following canonical structure |
+
+### Execution Steps (Priority Order)
+
+1. ✅ **Create `01_Daily/` directory structure** with README
+2. ✅ **Migrate root-level daily notes** to `01_Daily/YYYY/MM/`
+3. **Create `_System/` subdirectories** (`agents/`, `logs/`, `routing/`, `memory/`)
+4. **Populate templates** in `30_Templates/` with required metadata
+5. **Create entity registry** in `_System/memory/Entities.md`
+6. **Create alias registry** in `_System/memory/Aliases.md`
+7. **Archive obsolete folders** (if any) to `90_Archive/deprecated/`
+8. **Validate wikilinks** across vault
+9. **Run vault validation** in Obsidian desktop app
+10. **Create PR and request review**
 
 ---
 
