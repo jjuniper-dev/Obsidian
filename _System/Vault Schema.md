@@ -1,3 +1,13 @@
+---
+title: Vault Schema
+note_type: system
+status: active
+source_of_truth: true
+canonical_layer: obsidian
+semantic_status: canonical
+updated: 2026-05-26
+---
+
 # Vault Schema
 
 ## Purpose
@@ -6,36 +16,21 @@ This document defines governance for the Obsidian vault as a human-readable sema
 
 ## Repository Authority Model
 
-The PCA uses at least two GitHub repositories with distinct authority boundaries.
-
 | Repository | Role | Authority |
 |---|---|---|
 | `jjuniper-dev/personal-cognitive-architecture` | System architecture, implementation, workflows, agents, roadmap, backlog execution | Canonical architecture and implementation authority |
-| `jjuniper-dev/Obsidian` | Central Obsidian vault, human-readable memory, reference notes, captured knowledge | Canonical human-readable memory surface once schema-governed |
+| `jjuniper-dev/Obsidian` | Central Obsidian vault, human-readable memory, reference notes, captured knowledge | Canonical human-readable memory surface |
 
 Architecture reference documents may be mirrored into the Obsidian vault under `40_Reference/PCA/`, but unless explicitly marked otherwise, the PCA repository remains the source of truth for architecture and implementation.
 
-## Role of Obsidian
+## Taxonomy Model
 
-Obsidian is a human-readable semantic memory layer.
+The vault currently supports two folder schemes:
 
-Obsidian is authoritative for reviewed notes, captures, concepts, references, and human-curated knowledge. It is not automatically authoritative for PCA architecture, implementation, schemas, workflow definitions, or agent operating rules unless those documents explicitly declare themselves canonical.
+1. **Governed canonical taxonomy** (target state in GitHub main)
+2. **Capture taxonomy** (legacy/ingest structure from OneDrive Remotely Save)
 
-## Vault Maturity Status
-
-Current Obsidian repo maturity: early / scaffolded.
-
-Known current state:
-- README identifies the repo as the central Obsidian vault.
-- PCA architecture reference notes exist under `40_Reference/PCA/`.
-- These reference notes point back to the PCA repo as canonical source.
-- `_System/Vault Schema.md` now defines governance baseline.
-- Folder taxonomy, templates, canonical entity registry, alias registry, and wikilink validation are in active refinement.
-
-Backlog implication:
-Vault governance is an MVP-enabling workstream.
-
-## Folder Taxonomy (Baseline)
+### Canonical Taxonomy (authoritative)
 
 - `00_Inbox` — capture-first landing zone
 - `01_Daily` — daily logs and chronicle notes
@@ -51,6 +46,44 @@ Vault governance is an MVP-enabling workstream.
 - `40_Reference` — mirrored/reference materials
 - `_System` — governance, workflows, schemas, agents
 - `90_Archive` — retired material
+
+### Capture Taxonomy (transitional)
+
+Observed capture folders in OneDrive (`Apps/remotely-save/050926_vault`) include:
+
+- `10_Reflections`
+- `20_Notes`
+- `30_Clippings`
+- `40_Research`
+- `50_Tasks`
+- `60_Reference`
+- `70_Processed`
+
+These are accepted as ingestion folders and should be progressively normalized into canonical taxonomy.
+
+### Folder Normalization Map
+
+- `10_Reflections` -> `04_Concepts` or `05_Themes`
+- `20_Notes` -> `00_Inbox` (triage) or `03_Research`
+- `30_Clippings` -> `40_Reference`
+- `40_Research` -> `03_Research`
+- `50_Tasks` -> `02_Projects`
+- `60_Reference` -> `40_Reference`
+- `70_Processed` -> `07_Outputs` or `90_Archive`
+
+## Core Fields (Cross-cutting)
+
+```yaml
+title:
+note_type: capture | concept | reference | decision | project | source | moc | daily | system | reflection | task | clipping
+status: inbox | draft | active | canonical | archived
+context: personal | work | mixed
+sensitivity: public | internal | confidential | restricted
+tags: []
+created:
+updated:
+related: []
+```
 
 ## Source-of-Truth Metadata
 
@@ -77,31 +110,9 @@ semantic_status: canonical
 
 ## Agent Write Rules
 
-Agents must not treat every Markdown file in the Obsidian repo as canonical knowledge.
-
-Before writing or updating a vault note, agents must determine:
-1. Is this a vault-native note or a mirror of another source?
-2. Does the note have source-of-truth metadata?
-3. Is this a canonical concept, reference, capture, decision, project note, or transient inbox item?
-4. Does the note require alias or wikilink validation?
-5. Does the write create a duplicate concept?
-6. Does the write modify a human-reviewed/canonical note?
-7. Should the change go to INBOX instead of direct promotion?
-
-## Vault Governance Workstream
-
-### Theme I — Vault Governance and Memory Operations
-
-Objective: turn the Obsidian repo from a central vault into a governed semantic memory surface.
-
-Candidate backlog items:
-- Populate and maintain this schema.
-- Define official vault folder taxonomy and enforcement checks.
-- Define frontmatter standards by note type.
-- Define canonical entity registry location.
-- Define alias registry location.
-- Define wikilink validation rules.
-- Define reference-copy vs canonical-source rules.
-- Define vault write permissions for agents.
-- Define GitHub-backed vault connector read/write policy.
-- Define vault sync and conflict-resolution policy.
+Before writing/updating a vault note, agents must determine:
+1. Is this vault-native or a mirror of another source?
+2. Does note frontmatter contain valid `source_of_truth` metadata?
+3. Is this canonical concept/reference/capture/decision/project/transient inbox?
+4. Does the write create duplicate concept or broken wikilinks?
+5. If in capture taxonomy, should this be promoted/moved into canonical taxonomy?
