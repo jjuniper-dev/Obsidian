@@ -5,7 +5,7 @@ status: active
 source_of_truth: true
 canonical_layer: obsidian
 semantic_status: canonical
-updated: 2026-05-26
+updated: 2026-05-30
 ---
 
 # Vault Schema
@@ -85,6 +85,20 @@ updated:
 related: []
 ```
 
+## Lifecycle State Alignment
+
+The `status` field above is a **human triage label** for vault navigation. It maps to the canonical PCA knowledge lifecycle states defined in `jjuniper-dev/personal-cognitive-architecture/docs/KNOWLEDGE-LIFECYCLE.md`:
+
+| Vault `status` | Canonical lifecycle `state`(s) |
+|---|---|
+| `inbox` | `captured`, `inbox` |
+| `draft` | `inbox`, `validated` |
+| `active` | `provisional`, `reconciled` |
+| `canonical` | `trusted` |
+| `archived` | `archived` |
+
+The canonical lifecycle uses additional machine-tracked states (`provisional`, `reconciled`, `trusted`, `contested`, `rejected`, `deleted`, `merged`, `superseded`) stored in Qdrant/Neo4j metadata rather than vault frontmatter. The vault `status` field is the human-readable surface; the full state machine lives in the canonical lifecycle document and `schemas/canonical-metadata.schema.json` in the PCA repo.
+
 ## Source-of-Truth Metadata
 
 ### Required for mirror/reference notes
@@ -116,3 +130,6 @@ Before writing/updating a vault note, agents must determine:
 3. Is this canonical concept/reference/capture/decision/project/transient inbox?
 4. Does the write create duplicate concept or broken wikilinks?
 5. If in capture taxonomy, should this be promoted/moved into canonical taxonomy?
+
+See `_System/agents/capture-agent.md` for specific write permissions for the capture agent.
+Run `_System/scripts/validate_vault.py` to check vault frontmatter compliance.
