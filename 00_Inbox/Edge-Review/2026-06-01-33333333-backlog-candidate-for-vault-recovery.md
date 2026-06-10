@@ -1,0 +1,104 @@
+---
+type: note
+source: manual
+status: raw
+confidence: 0.78
+tags: [edge-capture, backlog_candidate]
+created_at: "2026-06-01T16:20:32.534Z"
+updated_at: "2026-06-01T16:20:32.534Z"
+provenance:
+  workflow: WF-EdgeCapture
+  model: gemma-3n
+  timestamp: "2026-06-01T16:20:32.534Z"
+gate_decision: backlog_review_queue
+gate_reason: "backlog mutations require human approval"
+---
+
+# Backlog candidate for Vault recovery
+
+Summary: Proposed backlog item to improve PCA recovery guidance for Vault restart and unseal failures.
+
+Source client: iphone-shortcut
+Capture type: backlog_candidate
+Recommended target: backlog_review_queue
+Overall score: 0.78
+Extraction confidence: 0.97
+
+## Raw content
+
+```json
+{
+  "event_id": "33333333-3333-4333-8333-333333333333",
+  "captured_at": "2026-06-01T14:12:00Z",
+  "source_client": "iphone-shortcut",
+  "capture_type": "backlog_candidate",
+  "raw_ref": {
+    "kind": "inline",
+    "value": "Add a recovery runbook scenario for failed Vault unseal after Docker restart.",
+    "mime_type": "text/plain",
+    "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "content": {
+    "title": "Backlog candidate for Vault recovery",
+    "text": "Add a recovery runbook scenario for failed Vault unseal after Docker restart.",
+    "summary": "Proposed backlog item to improve PCA recovery guidance for Vault restart and unseal failures.",
+    "language": "en",
+    "ocr_text": null,
+    "transcript": null,
+    "urls": [],
+    "entities": [
+      "Vault",
+      "Docker"
+    ]
+  },
+  "triage": {
+    "content_type": "backlog_proposal",
+    "sensitivity": "private",
+    "actionability": "high",
+    "project_hints": [
+      "recovery",
+      "operations"
+    ],
+    "tags": [
+      "backlog",
+      "vault",
+      "recovery"
+    ],
+    "review_reason": "Backlog mutation requires human approval."
+  },
+  "scoring": {
+    "credibility": 0.9,
+    "relevance": 0.82,
+    "novelty": 0.61,
+    "signal_strength": 0.88,
+    "overall_score": 0.78,
+    "routing_band": "advance_to_integration",
+    "reasoning": "Strong action signal, but target is a governed backlog mutation."
+  },
+  "routing": {
+    "recommended_target": "backlog_review_queue",
+    "allowed_targets": [
+      "backlog_review_queue",
+      "review_hold"
+    ],
+    "requires_human_approval": true,
+    "blocked_actions": [
+      "github_write",
+      "issue_tracker_write"
+    ]
+  },
+  "governance": {
+    "policy_version": "2026-06-01",
+    "sensitive": false,
+    "review_required": true,
+    "external_write_allowed": false
+  },
+  "provenance": {
+    "edge_model": "gemma-3n",
+    "edge_runtime": "litert",
+    "edge_device_class": "ios-or-relay",
+    "extraction_confidence": 0.97,
+    "workflow": "PCA-WP-EDGE-GEMMA-001"
+  }
+}
+```

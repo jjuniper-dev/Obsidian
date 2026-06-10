@@ -1,0 +1,103 @@
+---
+type: note
+source: manual
+status: raw
+confidence: 0.77
+tags: [edge-capture, text]
+created_at: "2026-06-01T16:20:32.446Z"
+updated_at: "2026-06-01T16:20:32.446Z"
+provenance:
+  workflow: WF-EdgeCapture
+  model: gemma-3n
+  timestamp: "2026-06-01T16:20:32.446Z"
+gate_decision: obsidian_inbox
+gate_reason: "high-confidence low-risk capture"
+---
+
+# Governance framing reminder
+
+Summary: Short action-oriented reminder about revised governance framing ahead of a near-term review.
+
+Source client: iphone-shortcut
+Capture type: text
+Recommended target: obsidian_inbox
+Overall score: 0.77
+Extraction confidence: 0.98
+
+## Raw content
+
+```json
+{
+  "event_id": "44444444-4444-4444-8444-444444444444",
+  "captured_at": "2026-06-01T15:00:00Z",
+  "source_client": "iphone-shortcut",
+  "capture_type": "text",
+  "raw_ref": {
+    "kind": "inline",
+    "value": "Need to capture the revised governance framing before tomorrow's review.",
+    "mime_type": "text/plain",
+    "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  "content": {
+    "title": "Governance framing reminder",
+    "text": "Need to capture the revised governance framing before tomorrow's review.",
+    "summary": "Short action-oriented reminder about revised governance framing ahead of a near-term review.",
+    "language": "en",
+    "ocr_text": null,
+    "transcript": null,
+    "urls": [],
+    "entities": [
+      "governance",
+      "review"
+    ]
+  },
+  "triage": {
+    "content_type": "project_note",
+    "sensitivity": "private",
+    "actionability": "high",
+    "project_hints": [
+      "governance"
+    ],
+    "tags": [
+      "text",
+      "governance",
+      "review"
+    ],
+    "review_reason": null
+  },
+  "scoring": {
+    "credibility": 0.92,
+    "relevance": 0.82,
+    "novelty": 0.58,
+    "signal_strength": 0.76,
+    "overall_score": 0.77,
+    "routing_band": "advance_to_integration",
+    "reasoning": "High-relevance user capture with clear action signal and low sensitivity."
+  },
+  "routing": {
+    "recommended_target": "obsidian_inbox",
+    "allowed_targets": [
+      "obsidian_inbox",
+      "backlog_review_queue"
+    ],
+    "requires_human_approval": false,
+    "blocked_actions": [
+      "github_write",
+      "issue_tracker_write"
+    ]
+  },
+  "governance": {
+    "policy_version": "2026-06-01",
+    "sensitive": false,
+    "review_required": false,
+    "external_write_allowed": false
+  },
+  "provenance": {
+    "edge_model": "gemma-3n",
+    "edge_runtime": "litert",
+    "edge_device_class": "ios-or-relay",
+    "extraction_confidence": 0.98,
+    "workflow": "PCA-WP-EDGE-GEMMA-001"
+  }
+}
+```

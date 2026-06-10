@@ -1,0 +1,15 @@
+{
+  "rawKeys": [
+    "headers",
+    "params",
+    "query",
+    "body",
+    "webhookUrl",
+    "executionMode"
+  ],
+  "bodyType": "object",
+  "bodyKeys": [
+    ""
+  ],
+  "itemType": "object"
+}
