@@ -1,0 +1,99 @@
+---
+type: note
+source: manual
+status: raw
+confidence: 0.95
+tags: [edge-capture, backlog_candidate]
+created_at: "2026-07-12T22:07:29.700Z"
+updated_at: "2026-07-12T22:07:29.700Z"
+provenance:
+  workflow: WF-EdgeCapture
+  model: legacy-normalizer
+  timestamp: "2026-07-12T22:07:29.700Z"
+gate_decision: backlog_review_queue
+gate_reason: "backlog mutations require human approval"
+---
+
+# WF10 gateway â€” validate routing_hint
+
+Summary: Add routing_hint field validation to the WF10 gateway Code node so events with unknown routing_hint values are rejected with a 400 and logged to the incident stream.
+
+Source client: desktop-edge
+Capture type: backlog_candidate
+Recommended target: backlog_review_queue
+Overall score: 0.95
+Extraction confidence: 1.00
+
+## Raw content
+
+```json
+{
+  "event_id": "09a1ae3a-63ec-4a03-a1fd-9241111cb3d3",
+  "captured_at": "2026-06-19T16:30:00Z",
+  "source_client": "desktop-edge",
+  "capture_type": "backlog_candidate",
+  "raw_ref": {
+    "mime_type": "text/plain",
+    "sha256": null,
+    "value": "Add routing_hint field validation to the WF10 gateway Code node so events with unknown routing_hint values are rejected with a 400 and logged to the incident stream.",
+    "kind": "inline"
+  },
+  "content": {
+    "entities": [],
+    "urls": [],
+    "title": "WF10 gateway â€” validate routing_hint",
+    "language": "en",
+    "ocr_text": null,
+    "transcript": null,
+    "summary": "Add routing_hint field validation to the WF10 gateway Code node so events with unknown routing_hint values are rejected with a 400 and logged to the incident stream.",
+    "text": "Add routing_hint field validation to the WF10 gateway Code node so events with unknown routing_hint values are rejected with a 400 and logged to the incident stream."
+  },
+  "triage": {
+    "project_hints": [],
+    "review_reason": "Legacy task candidate requires review.",
+    "content_type": "task_candidate",
+    "sensitivity": "internal",
+    "tags": [
+      "wf10",
+      "gateway",
+      "validation",
+      "backlog-candidate"
+    ],
+    "actionability": "high"
+  },
+  "scoring": {
+    "routing_band": "advance_to_integration",
+    "overall_score": 0.95,
+    "relevance": 0.8999999999999999,
+    "reasoning": "Normalized from legacy capture example.",
+    "signal_strength": 0.85,
+    "novelty": 0.7999999999999999,
+    "credibility": 0.95
+  },
+  "routing": {
+    "blocked_actions": [
+      "github_write",
+      "issue_tracker_write"
+    ],
+    "allowed_targets": [
+      "obsidian_inbox",
+      "backlog_review_queue"
+    ],
+    "recommended_target": "backlog_review_queue",
+    "requires_human_approval": true
+  },
+  "governance": {
+    "external_write_allowed": false,
+    "sensitive": false,
+    "review_required": true,
+    "policy_version": "2026-06-01"
+  },
+  "provenance": {
+    "workflow": "WF-Dispatch",
+    "edge_runtime": "none",
+    "edge_device_class": "desktop",
+    "edge_model": "legacy-normalizer",
+    "extraction_confidence": 1
+  }
+}
+```
