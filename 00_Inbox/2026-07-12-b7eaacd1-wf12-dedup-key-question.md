@@ -1,0 +1,99 @@
+---
+type: note
+source: manual
+status: raw
+confidence: 1.00
+tags: [edge-capture, text]
+created_at: "2026-07-12T22:06:46.376Z"
+updated_at: "2026-07-12T22:06:46.376Z"
+provenance:
+  workflow: WF-EdgeCapture
+  model: legacy-normalizer
+  timestamp: "2026-07-12T22:06:46.376Z"
+gate_decision: obsidian_inbox
+gate_reason: "high-confidence low-risk capture"
+---
+
+# WF12 dedup key question
+
+Summary: Look into whether WF12 memory deduplication should key on (session_id, concept) or just concept hash alone.
+
+Source client: iphone-shortcut
+Capture type: text
+Recommended target: obsidian_inbox
+Overall score: 1.00
+Extraction confidence: 1.00
+
+## Raw content
+
+```json
+{
+  "event_id": "b7eaacd1-5821-454f-8124-cc5be8a0723b",
+  "captured_at": "2026-06-19T14:22:00Z",
+  "source_client": "iphone-shortcut",
+  "capture_type": "text",
+  "raw_ref": {
+    "mime_type": "text/plain",
+    "sha256": null,
+    "value": "Look into whether WF12 memory deduplication should key on (session_id, concept) or just concept hash alone.",
+    "kind": "inline"
+  },
+  "content": {
+    "entities": [],
+    "urls": [],
+    "title": "WF12 dedup key question",
+    "language": "en",
+    "ocr_text": null,
+    "transcript": null,
+    "summary": "Look into whether WF12 memory deduplication should key on (session_id, concept) or just concept hash alone.",
+    "text": "Look into whether WF12 memory deduplication should key on (session_id, concept) or just concept hash alone."
+  },
+  "triage": {
+    "project_hints": [],
+    "review_reason": null,
+    "content_type": "text",
+    "sensitivity": "internal",
+    "tags": [
+      "wf12",
+      "memory",
+      "dedup",
+      "architecture"
+    ],
+    "actionability": "medium"
+  },
+  "scoring": {
+    "routing_band": "advance_to_integration",
+    "overall_score": 1,
+    "relevance": 0.95,
+    "reasoning": "Normalized from legacy capture example.",
+    "signal_strength": 0.65,
+    "novelty": 0.85,
+    "credibility": 1
+  },
+  "routing": {
+    "blocked_actions": [
+      "github_write",
+      "issue_tracker_write"
+    ],
+    "allowed_targets": [
+      "obsidian_inbox",
+      "backlog_review_queue"
+    ],
+    "recommended_target": "obsidian_inbox",
+    "requires_human_approval": false
+  },
+  "governance": {
+    "external_write_allowed": false,
+    "sensitive": false,
+    "review_required": false,
+    "policy_version": "2026-06-01"
+  },
+  "provenance": {
+    "workflow": "",
+    "edge_runtime": "none",
+    "edge_device_class": "ios",
+    "edge_model": "legacy-normalizer",
+    "extraction_confidence": 1
+  }
+}
+```
